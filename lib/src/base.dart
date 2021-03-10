@@ -180,7 +180,7 @@ abstract class SentryClient {
     final body = bodyEncoder(data, headers);
 
     final Response response = await httpClient.post(
-      postUri,
+      Uri.parse(postUri),
       headers: headers,
       body: body,
     );
