@@ -7,7 +7,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:http/http.dart';
-import 'package:meta/meta.dart';
+
 import 'base.dart';
 import 'version.dart';
 
@@ -42,12 +42,12 @@ class SentryIOClient extends SentryClient {
   /// field instead of the built-in random UUID v4 generator. This is useful in
   /// tests.
   factory SentryIOClient({
-    @required String dsn,
-    Event environmentAttributes,
-    bool compressPayload,
-    Client httpClient,
+    required String dsn,
+    Event? environmentAttributes,
+    bool? compressPayload,
+    Client? httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
+    UuidGenerator? uuidGenerator,
   }) {
     httpClient ??= Client();
     clock ??= getUtcDateTime;
@@ -58,7 +58,7 @@ class SentryIOClient extends SentryClient {
       httpClient: httpClient,
       clock: clock,
       uuidGenerator: uuidGenerator,
-      environmentAttributes: environmentAttributes,
+      environmentAttributes: environmentAttributes ?? Event(),
       dsn: dsn,
       compressPayload: compressPayload,
       platform: sdkPlatform,
@@ -66,14 +66,14 @@ class SentryIOClient extends SentryClient {
   }
 
   SentryIOClient._({
-    Client httpClient,
+    required Client httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
-    Event environmentAttributes,
-    String dsn,
+    required UuidGenerator uuidGenerator,
+    required Event environmentAttributes,
+    required String dsn,
     this.compressPayload = true,
-    String platform,
-    String origin,
+    String? platform,
+    String? origin,
   }) : super.base(
           httpClient: httpClient,
           clock: clock,
@@ -102,7 +102,7 @@ class SentryIOClient extends SentryClient {
   ) {
     // [SentryIOClient] implement gzip compression
     // gzip compression is not available on browser
-    List<int> body = utf8.encode(json.encode(data));
+    var body = utf8.encode(json.encode(data));
     if (compressPayload) {
       headers['Content-Encoding'] = 'gzip';
       body = gzip.encode(body);
@@ -112,12 +112,12 @@ class SentryIOClient extends SentryClient {
 }
 
 SentryClient createSentryClient({
-  @required String dsn,
-  Event environmentAttributes,
-  bool compressPayload,
-  Client httpClient,
+  required String dsn,
+  Event? environmentAttributes,
+  bool? compressPayload,
+  Client? httpClient,
   dynamic clock,
-  UuidGenerator uuidGenerator,
+  UuidGenerator? uuidGenerator,
 }) =>
     SentryIOClient(
       dsn: dsn,

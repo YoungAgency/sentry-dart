@@ -12,7 +12,6 @@ import 'package:usage/uuid/uuid.dart';
 import 'client_stub.dart'
     if (dart.library.html) 'browser.dart'
     if (dart.library.io) 'io.dart';
-
 import 'stack_trace.dart';
 import 'utils.dart';
 import 'version.dart';
@@ -27,12 +26,12 @@ abstract class SentryClient {
   /// Creates an `SentryIOClient` if `dart:io` is available and a `SentryBrowserClient` if
   /// `dart:html` is available, otherwise it will throw an unsupported error.
   factory SentryClient({
-    @required String dsn,
-    Event environmentAttributes,
-    bool compressPayload,
-    Client httpClient,
+    required String dsn,
+    Event? environmentAttributes,
+    bool? compressPayload,
+    Client? httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
+    UuidGenerator? uuidGenerator,
   }) =>
       createSentryClient(
         dsn: dsn,
@@ -52,7 +51,7 @@ abstract class SentryClient {
   @protected
   final Client httpClient;
 
-  ClockProvider _clock;
+  ClockProvider? _clock;
   final UuidGenerator _uuidGenerator;
 
   /// Contains [Event] attributes that are automatically mixed into all events
@@ -76,7 +75,7 @@ abstract class SentryClient {
 
   /// The Sentry.io secret key for the project.
   @visibleForTesting
-  String get secretKey => _dsn.secretKey;
+  String? get secretKey => _dsn.secretKey;
 
   /// The ID issued by Sentry.io to your project.
   ///
@@ -93,21 +92,21 @@ abstract class SentryClient {
   ///
   /// See also:
   /// * https://docs.sentry.io/learn/context/#capturing-the-user
-  User userContext;
+  User? userContext;
 
   /// Use for browser stacktrace
-  final String origin;
+  final String? origin;
 
   /// Used by sentry to differentiate browser from io environment
   final String _platform;
 
   SentryClient.base({
-    this.httpClient,
+    required this.httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
-    String dsn,
-    this.environmentAttributes,
-    String platform,
+    UuidGenerator? uuidGenerator,
+    required String dsn,
+    required this.environmentAttributes,
+    String? platform,
     this.origin,
   })  : _dsn = Dsn.parse(dsn),
         _uuidGenerator = uuidGenerator ?? generateUuidV4WithoutDashes,
@@ -121,12 +120,12 @@ abstract class SentryClient {
 
   @visibleForTesting
   String get postUri {
-    String port = dsnUri.hasPort &&
+    var port = dsnUri.hasPort &&
             ((dsnUri.scheme == 'http' && dsnUri.port != 80) ||
                 (dsnUri.scheme == 'https' && dsnUri.port != 443))
         ? ':${dsnUri.port}'
         : '';
-    int pathLength = dsnUri.pathSegments.length;
+    var pathLength = dsnUri.pathSegments.length;
     String apiPath;
     if (pathLength > 1) {
       // some paths would present before the projectID in the dsnUri
@@ -135,75 +134,76 @@ abstract class SentryClient {
     } else {
       apiPath = 'api';
     }
-    return '${dsnUri.scheme}://${dsnUri.host}${port}/$apiPath/$projectId/store/';
+    return '${dsnUri.scheme}://${dsnUri.host}$port/$apiPath/$projectId/store/';
   }
 
   /// Reports an [event] to Sentry.io.
   Future<SentryResponse> capture({
-    @required Event event,
-    StackFrameFilter stackFrameFilter,
+    required Event event,
+    StackFrameFilter? stackFrameFilter,
   }) async {
-    final DateTime now = _clock();
-    String authHeader = 'Sentry sentry_version=6, sentry_client=$sentryClient, '
-        'sentry_timestamp=${now.millisecondsSinceEpoch}, sentry_key=$publicKey';
-    if (secretKey != null) {
+    final now = _clock?.call();
+    if (now != null) {
+      var authHeader = 'Sentry sentry_version=6, sentry_client=$sentryClient, '
+          'sentry_timestamp=${now.millisecondsSinceEpoch}, sentry_key=$publicKey';
       authHeader += ', sentry_secret=$secretKey';
-    }
 
-    final Map<String, String> headers = buildHeaders(authHeader);
+      final headers = buildHeaders(authHeader);
 
-    final Map<String, dynamic> data = <String, dynamic>{
-      'project': projectId,
-      'event_id': _uuidGenerator(),
-      'timestamp': formatDateAsIso8601WithSecondPrecision(now),
-      'logger': defaultLoggerName,
-    };
+      final data = <String, dynamic>{
+        'project': projectId,
+        'event_id': _uuidGenerator(),
+        'timestamp': formatDateAsIso8601WithSecondPrecision(now),
+        'logger': defaultLoggerName,
+      };
 
-    if (environmentAttributes != null) {
       mergeAttributes(environmentAttributes.toJson(), into: data);
-    }
 
-    // Merge the user context.
-    if (userContext != null) {
-      mergeAttributes({'user': userContext.toJson()}, into: data);
-    }
-
-    mergeAttributes(
-      event.toJson(
-        stackFrameFilter: stackFrameFilter,
-        origin: origin,
-      ),
-      into: data,
-    );
-    mergeAttributes({'platform': _platform}, into: data);
-
-    final body = bodyEncoder(data, headers);
-
-    final Response response = await httpClient.post(
-      Uri.parse(postUri),
-      headers: headers,
-      body: body,
-    );
-
-    if (response.statusCode != 200) {
-      String errorMessage =
-          'Sentry.io responded with HTTP ${response.statusCode}';
-      if (response.headers['x-sentry-error'] != null) {
-        errorMessage += ': ${response.headers['x-sentry-error']}';
+      // Merge the user context.
+      if (userContext != null) {
+        mergeAttributes({'user': userContext!.toJson()}, into: data);
       }
-      return SentryResponse.failure(errorMessage);
-    }
 
-    final String eventId = json.decode(response.body)['id'];
-    return SentryResponse.success(eventId: eventId);
+      if (stackFrameFilter != null && origin != null) {
+        mergeAttributes(
+          event.toJson(
+            stackFrameFilter: stackFrameFilter,
+            origin: origin!,
+          ),
+          into: data,
+        );
+      }
+      mergeAttributes({'platform': _platform}, into: data);
+
+      final body = bodyEncoder(data, headers);
+
+      final response = await httpClient.post(
+        Uri.parse(postUri),
+        headers: headers,
+        body: body,
+      );
+
+      if (response.statusCode != 200) {
+        var errorMessage =
+            'Sentry.io responded with HTTP ${response.statusCode}';
+        if (response.headers['x-sentry-error'] != null) {
+          errorMessage += ': ${response.headers['x-sentry-error']}';
+        }
+        return SentryResponse.failure(errorMessage);
+      }
+
+      final String eventId = json.decode(response.body)['id'];
+      return SentryResponse.success(eventId: eventId);
+    }
+    return SentryResponse.failure('now == null');
   }
 
   /// Reports the [exception] and optionally its [stackTrace] to Sentry.io.
   Future<SentryResponse> captureException({
-    @required dynamic exception,
+    required dynamic exception,
     dynamic stackTrace,
   }) {
-    final Event event = Event(
+    final event = Event(
       exception: exception,
       stackTrace: stackTrace,
     );
@@ -227,9 +227,7 @@ abstract class SentryClient {
       'Content-Type': 'application/json',
     };
 
-    if (authHeader != null) {
-      headers['X-Sentry-Auth'] = authHeader;
-    }
+    headers['X-Sentry-Auth'] = authHeader;
 
     return headers;
   }
@@ -242,7 +240,7 @@ abstract class SentryClient {
 /// contain the description of the error.
 @immutable
 class SentryResponse {
-  const SentryResponse.success({@required this.eventId})
+  const SentryResponse.success({required this.eventId})
       : isSuccessful = true,
         error = null;
 
@@ -254,10 +252,10 @@ class SentryResponse {
   final bool isSuccessful;
 
   /// The ID Sentry.io assigned to the submitted event for future reference.
-  final String eventId;
+  final String? eventId;
 
   /// Error message, if the response is not successful.
-  final String error;
+  final String? error;
 }
 
 typedef UuidGenerator = String Function();
@@ -292,6 +290,86 @@ class Event {
   /// fingerprint with custom fingerprints.
   static const String defaultFingerprint = '{{ default }}';
 
+  /// The logger that logged the event.
+  final String? loggerName;
+
+  /// Identifies the server that logged this event.
+  final String? serverName;
+
+  /// The version of the application that logged the event.
+  final String? release;
+
+  /// The environment that logged the event, e.g. "production", "staging".
+  final String? environment;
+
+  /// Event message.
+  ///
+  /// Generally an event either contains a [message] or an [exception].
+  final String? message;
+
+  /// An object that was thrown.
+  ///
+  /// It's `runtimeType` and `toString()` are logged. If this behavior is
+  /// undesirable, consider using a custom formatted [message] instead.
+  final dynamic exception;
+
+  /// The stack trace corresponding to the thrown [exception].
+  ///
+  /// Can be `null`, a [String], or a [StackTrace].
+  final dynamic stackTrace;
+
+  /// The name of the transaction which generated this event,
+  /// for example, the route name: `"/users/<username>/"`.
+  final String? transaction;
+
+  /// How important this event is.
+  final SeverityLevel? level;
+
+  /// What caused this event to be logged.
+  final String? culprit;
+
+  /// Name/value pairs that events can be searched by.
+  final Map<String, String>? tags;
+
+  /// Arbitrary name/value pairs attached to the event.
+  ///
+  /// Sentry.io docs do not talk about restrictions on the values, other than
+  /// they must be JSON-serializable.
+  final Map<String, dynamic>? extra;
+
+  /// List of breadcrumbs for this event.
+  ///
+  /// See also:
+  /// * https://docs.sentry.io/enriching-error-data/breadcrumbs/?platform=javascript
+  final List<Breadcrumb>? breadcrumbs;
+
+  /// Information about the current user.
+  ///
+  /// The value in this field overrides the user context
+  /// set in [SentryClient.userContext] for this logged event.
+  final User? userContext;
+
+  /// The context interfaces provide additional context data.
+  /// Typically this is data related to the current user,
+  /// the current HTTP request.
+  final Contexts? contexts;
+
+  /// Used to deduplicate events by grouping ones with the same fingerprint
+  /// together.
+  ///
+  /// If not specified a default deduplication fingerprint is used. The default
+  /// fingerprint may be supplemented by additional fingerprints by specifying
+  /// multiple values. The default fingerprint can be specified by adding
+  /// [defaultFingerprint] to the list in addition to your custom values.
+  ///
+  /// Examples:
+  ///
+  ///     // A completely custom fingerprint:
+  ///     var custom = ['foo', 'bar', 'baz'];
+  ///     // A fingerprint that supplements the default one with value 'foo':
+  ///     var supplemented = [Event.defaultFingerprint, 'foo'];
+  final List<String>? fingerprint;
+
   /// Creates an event.
   const Event({
     this.loggerName,
@@ -312,102 +390,22 @@ class Event {
     this.breadcrumbs,
   });
 
-  /// The logger that logged the event.
-  final String loggerName;
-
-  /// Identifies the server that logged this event.
-  final String serverName;
-
-  /// The version of the application that logged the event.
-  final String release;
-
-  /// The environment that logged the event, e.g. "production", "staging".
-  final String environment;
-
-  /// Event message.
-  ///
-  /// Generally an event either contains a [message] or an [exception].
-  final String message;
-
-  /// An object that was thrown.
-  ///
-  /// It's `runtimeType` and `toString()` are logged. If this behavior is
-  /// undesirable, consider using a custom formatted [message] instead.
-  final dynamic exception;
-
-  /// The stack trace corresponding to the thrown [exception].
-  ///
-  /// Can be `null`, a [String], or a [StackTrace].
-  final dynamic stackTrace;
-
-  /// The name of the transaction which generated this event,
-  /// for example, the route name: `"/users/<username>/"`.
-  final String transaction;
-
-  /// How important this event is.
-  final SeverityLevel level;
-
-  /// What caused this event to be logged.
-  final String culprit;
-
-  /// Name/value pairs that events can be searched by.
-  final Map<String, String> tags;
-
-  /// Arbitrary name/value pairs attached to the event.
-  ///
-  /// Sentry.io docs do not talk about restrictions on the values, other than
-  /// they must be JSON-serializable.
-  final Map<String, dynamic> extra;
-
-  /// List of breadcrumbs for this event.
-  ///
-  /// See also:
-  /// * https://docs.sentry.io/enriching-error-data/breadcrumbs/?platform=javascript
-  final List<Breadcrumb> breadcrumbs;
-
-  /// Information about the current user.
-  ///
-  /// The value in this field overrides the user context
-  /// set in [SentryClient.userContext] for this logged event.
-  final User userContext;
-
-  /// The context interfaces provide additional context data.
-  /// Typically this is data related to the current user,
-  /// the current HTTP request.
-  final Contexts contexts;
-
-  /// Used to deduplicate events by grouping ones with the same fingerprint
-  /// together.
-  ///
-  /// If not specified a default deduplication fingerprint is used. The default
-  /// fingerprint may be supplemented by additional fingerprints by specifying
-  /// multiple values. The default fingerprint can be specified by adding
-  /// [defaultFingerprint] to the list in addition to your custom values.
-  ///
-  /// Examples:
-  ///
-  ///     // A completely custom fingerprint:
-  ///     var custom = ['foo', 'bar', 'baz'];
-  ///     // A fingerprint that supplements the default one with value 'foo':
-  ///     var supplemented = [Event.defaultFingerprint, 'foo'];
-  final List<String> fingerprint;
-
   Event copyWith({
-    String loggerName,
-    String serverName,
-    String release,
-    String environment,
-    String message,
-    String transaction,
+    String? loggerName,
+    String? serverName,
+    String? release,
+    String? environment,
+    String? message,
+    String? transaction,
     dynamic exception,
     dynamic stackTrace,
-    SeverityLevel level,
-    String culprit,
-    Map<String, String> tags,
-    Map<String, dynamic> extra,
-    List<String> fingerprint,
-    User userContext,
-    List<Breadcrumb> breadcrumbs,
+    SeverityLevel? level,
+    String? culprit,
+    Map<String, String>? tags,
+    Map<String, dynamic>? extra,
+    List<String>? fingerprint,
+    User? userContext,
+    List<Breadcrumb>? breadcrumbs,
   }) =>
       Event(
         loggerName: loggerName ?? this.loggerName,
@@ -428,9 +426,11 @@ class Event {
       );
 
   /// Serializes this event to JSON.
-  Map<String, dynamic> toJson(
-      {StackFrameFilter stackFrameFilter, String origin}) {
-    final Map<String, dynamic> json = <String, dynamic>{
+  Map<String, dynamic> toJson({
+    StackFrameFilter? stackFrameFilter,
+    String? origin,
+  }) {
+    final json = <String, dynamic>{
       'platform': sdkPlatform,
       'sdk': {
         'version': sdkVersion,
@@ -482,39 +482,39 @@ class Event {
     }
 
     if (level != null) {
-      json['level'] = level.name;
+      json['level'] = level!.name;
     }
 
     if (culprit != null) {
       json['culprit'] = culprit;
     }
 
-    if (tags != null && tags.isNotEmpty) {
+    if (tags != null && tags!.isNotEmpty) {
       json['tags'] = tags;
     }
 
-    if (extra != null && extra.isNotEmpty) {
+    if (extra != null && extra!.isNotEmpty) {
       json['extra'] = extra;
     }
 
     Map<String, dynamic> contextsMap;
-    if (contexts != null && (contextsMap = contexts.toJson()).isNotEmpty) {
+    if (contexts != null && (contextsMap = contexts!.toJson()).isNotEmpty) {
       json['contexts'] = contextsMap;
     }
 
     Map<String, dynamic> userContextMap;
     if (userContext != null &&
-        (userContextMap = userContext.toJson()).isNotEmpty) {
+        (userContextMap = userContext!.toJson()).isNotEmpty) {
       json['user'] = userContextMap;
     }
 
-    if (fingerprint != null && fingerprint.isNotEmpty) {
+    if (fingerprint != null && fingerprint!.isNotEmpty) {
       json['fingerprint'] = fingerprint;
     }
 
-    if (breadcrumbs != null && breadcrumbs.isNotEmpty) {
+    if (breadcrumbs != null && breadcrumbs!.isNotEmpty) {
       json['breadcrumbs'] = <String, List<Map<String, dynamic>>>{
-        'values': breadcrumbs.map((b) => b.toJson()).toList(growable: false)
+        'values': breadcrumbs!.map((b) => b.toJson()).toList(growable: false)
       };
     }
 
@@ -530,33 +530,33 @@ class Event {
 /// See also: https://docs.sentry.io/development/sdk-dev/event-payloads/contexts/.
 class Contexts {
   /// This describes the device that caused the event.
-  final Device device;
+  final Device? device;
 
   /// Describes the operating system on which the event was created.
   ///
   /// In web contexts, this is the operating system of the browse
   /// (normally pulled from the User-Agent string).
-  final OperatingSystem operatingSystem;
+  final OperatingSystem? operatingSystem;
 
   /// Describes a runtime in more detail.
   ///
   /// Typically this context is used multiple times if multiple runtimes
   /// are involved (for instance if you have a JavaScript application running
   /// on top of JVM).
-  final List<Runtime> runtimes;
+  final List<Runtime>? runtimes;
 
   /// App context describes the application.
   ///
   /// As opposed to the runtime, this is the actual application that was
   /// running and carries metadata about the current session.
-  final App app;
+  final App? app;
 
   /// Carries information about the browser or user agent for web-related
   /// errors.
   ///
   /// This can either be the browser this event ocurred in, or the user
   /// agent of a web request that triggered the event.
-  final Browser browser;
+  final Browser? browser;
 
   const Contexts({
     this.device,
@@ -568,51 +568,47 @@ class Contexts {
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
     Map<String, dynamic> deviceMap;
-    if (device != null && (deviceMap = device.toJson()).isNotEmpty) {
+    if (device != null && (deviceMap = device!.toJson()).isNotEmpty) {
       json['device'] = deviceMap;
     }
 
     Map<String, dynamic> osMap;
     if (operatingSystem != null &&
-        (osMap = operatingSystem.toJson()).isNotEmpty) {
+        (osMap = operatingSystem!.toJson()).isNotEmpty) {
       json['os'] = osMap;
     }
 
     Map<String, dynamic> appMap;
-    if (app != null && (appMap = app.toJson()).isNotEmpty) {
+    if (app != null && (appMap = app!.toJson()).isNotEmpty) {
       json['app'] = appMap;
     }
 
     Map<String, dynamic> browserMap;
-    if (browser != null && (browserMap = browser.toJson()).isNotEmpty) {
+    if (browser != null && (browserMap = browser!.toJson()).isNotEmpty) {
       json['browser'] = browserMap;
     }
 
     if (runtimes != null) {
-      if (runtimes.length == 1) {
-        final Runtime runtime = runtimes[0];
-        if (runtime != null) {
-          final String key = runtime.key ?? 'runtime';
-          json[key] = runtime.toJson();
-        }
-      } else if (runtimes.length > 1) {
-        for (final runtime in runtimes) {
-          if (runtime != null) {
-            String key = runtime.key ?? runtime.name.toLowerCase();
+      if (runtimes!.length == 1) {
+        final runtime = runtimes![0];
+        final key = runtime.key ?? '';
+        json[key] = runtime.toJson();
+      } else if (runtimes!.length > 1) {
+        for (final runtime in runtimes!) {
+          var key = runtime.key ?? '';
 
-            if (json.containsKey(key)) {
-              int k = 0;
-              while (json.containsKey(key)) {
-                key = '$key$k';
-                k++;
-              }
+          if (json.containsKey(key)) {
+            var k = 0;
+            while (json.containsKey(key)) {
+              key = '$key$k';
+              k++;
             }
-
-            json[key] = runtime.toJson()..addAll({"type": "runtime"});
           }
+
+          json[key] = runtime.toJson()..addAll({'type': 'runtime'});
         }
       }
     }
@@ -624,86 +620,86 @@ class Contexts {
 /// This describes the device that caused the event.
 class Device {
   /// The name of the device. This is typically a hostname.
-  final String name;
+  final String? name;
 
   /// The family of the device.
   ///
   /// This is normally the common part of model names across generations.
   /// For instance `iPhone` would be a reasonable family,
   /// so would be `Samsung Galaxy`.
-  final String family;
+  final String? family;
 
   /// The model name. This for instance can be `Samsung Galaxy S3`.
-  final String model;
+  final String? model;
 
   /// An internal hardware revision to identify the device exactly.
-  final String modelId;
+  final String? modelId;
 
   /// The CPU architecture.
-  final String arch;
+  final String? arch;
 
   /// If the device has a battery, this can be an floating point value
   /// defining the battery level (in the range 0-100).
-  final double batteryLevel;
+  final double? batteryLevel;
 
   /// Defines the orientation of a device.
-  final Orientation orientation;
+  final Orientation? orientation;
 
   /// The manufacturer of the device.
-  final String manufacturer;
+  final String? manufacturer;
 
   /// The brand of the device.
-  final String brand;
+  final String? brand;
 
   /// The screen resolution. (e.g.: `800x600`, `3040x1444`).
-  final String screenResolution;
+  final String? screenResolution;
 
   /// A floating point denoting the screen density.
-  final String screenDensity;
+  final String? screenDensity;
 
   /// A decimal value reflecting the DPI (dots-per-inch) density.
-  final String screenDpi;
+  final String? screenDpi;
 
   /// Whether the device was online or not.
-  final bool online;
+  final bool? online;
 
   /// Whether the device was charging or not.
-  final bool charging;
+  final bool? charging;
 
   /// Whether the device was low on memory.
-  final bool lowMemory;
+  final bool? lowMemory;
 
   /// A flag indicating whether this device is a simulator or an actual device.
-  final bool simulator;
+  final bool? simulator;
 
   /// Total system memory available in bytes.
-  final int memorySize;
+  final int? memorySize;
 
   /// Free system memory in bytes.
-  final int freeMemory;
+  final int? freeMemory;
 
   /// Memory usable for the app in bytes.
-  final int usableMemory;
+  final int? usableMemory;
 
   /// Total device storage in bytes.
-  final int storageSize;
+  final int? storageSize;
 
   /// Free device storage in bytes.
-  final int freeStorage;
+  final int? freeStorage;
 
   /// Total size of an attached external storage in bytes
   /// (e.g.: android SDK card).
-  final int externalStorageSize;
+  final int? externalStorageSize;
 
   /// Free size of an attached external storage in bytes
   /// (e.g.: android SDK card).
-  final int externalFreeStorage;
+  final int? externalFreeStorage;
 
   /// When the system was booted
-  final DateTime bootTime;
+  final DateTime? bootTime;
 
   /// The timezone of the device, e.g.: `Europe/Vienna`.
-  final String timezone;
+  final String? timezone;
 
   const Device({
     this.name,
@@ -736,16 +732,19 @@ class Device {
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
-    String orientation;
+    String? orientation;
 
     switch (this.orientation) {
       case Orientation.portrait:
-        orientation = "portait";
+        orientation = 'portait';
         break;
       case Orientation.landscape:
-        orientation = "landscape";
+        orientation = 'landscape';
+        break;
+      case null:
+        orientation = null;
         break;
     }
 
@@ -799,7 +798,7 @@ class Device {
       json['external_free_storage'] = externalFreeStorage;
     }
 
-    if (bootTime != null) json['boot_time'] = bootTime.toIso8601String();
+    if (bootTime != null) json['boot_time'] = bootTime!.toIso8601String();
 
     if (timezone != null) json['timezone'] = timezone;
 
@@ -815,27 +814,27 @@ enum Orientation { portrait, landscape }
 /// (normally pulled from the User-Agent string).
 class OperatingSystem {
   /// The name of the operating system.
-  final String name;
+  final String? name;
 
   /// The version of the operating system.
-  final String version;
+  final String? version;
 
   /// The internal build revision of the operating system.
-  final String build;
+  final String? build;
 
   /// An independent kernel version string.
   ///
   /// This is typically the entire output of the `uname` syscall.
-  final String kernelVersion;
+  final String? kernelVersion;
 
   /// A flag indicating whether the OS has been jailbroken or rooted.
-  final bool rooted;
+  final bool? rooted;
 
   /// An unprocessed description string obtained by the operating system.
   ///
   /// For some well-known runtimes, Sentry will attempt to parse name and
   /// version from this string, if they are not explicitly given.
-  final String rawDescription;
+  final String? rawDescription;
 
   const OperatingSystem({
     this.name,
@@ -848,7 +847,7 @@ class OperatingSystem {
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
     if (name != null) json['name'] = name;
 
@@ -876,26 +875,26 @@ class Runtime {
   /// in the Sentry UI. Defaults to lower case version of [name].
   ///
   /// Unused if only one [Runtime] is provided in [Contexts].
-  final String key;
+  final String? key;
 
   /// The name of the runtime.
-  final String name;
+  final String? name;
 
   /// The version identifier of the runtime.
-  final String version;
+  final String? version;
 
   /// An unprocessed description string obtained by the runtime.
   ///
   /// For some well-known runtimes, Sentry will attempt to parse name
   /// and version from this string, if they are not explicitly given.
-  final String rawDescription;
+  final String? rawDescription;
 
   const Runtime({this.key, this.name, this.version, this.rawDescription})
       : assert(key == null || key.length >= 1);
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
     if (name != null) json['name'] = name;
 
@@ -913,25 +912,25 @@ class Runtime {
 /// running and carries metadata about the current session.
 class App {
   /// Human readable application name, as it appears on the platform.
-  final String name;
+  final String? name;
 
   /// Human readable application version, as it appears on the platform.
-  final String version;
+  final String? version;
 
   /// Version-independent application identifier, often a dotted bundle ID.
-  final String identifier;
+  final String? identifier;
 
   /// Internal build identifier, as it appears on the platform.
-  final String build;
+  final String? build;
 
   /// String identifying the kind of build, e.g. `testflight`.
-  final String buildType;
+  final String? buildType;
 
   /// When the application was started by the user.
-  final DateTime startTime;
+  final DateTime? startTime;
 
   /// Application specific device identifier.
-  final String deviceAppHash;
+  final String? deviceAppHash;
 
   const App({
     this.name,
@@ -945,7 +944,7 @@ class App {
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
     if (name != null) json['app_name'] = name;
 
@@ -957,7 +956,9 @@ class App {
 
     if (buildType != null) json['build_type'] = buildType;
 
-    if (startTime != null) json['app_start_time'] = startTime.toIso8601String();
+    if (startTime != null) {
+      json['app_start_time'] = startTime!.toIso8601String();
+    }
 
     if (deviceAppHash != null) json['device_app_hash'] = deviceAppHash;
 
@@ -971,16 +972,16 @@ class App {
 /// agent of a web request that triggered the event.
 class Browser {
   /// Human readable application name, as it appears on the platform.
-  final String name;
+  final String? name;
 
   /// Human readable application version, as it appears on the platform.
-  final String version;
+  final String? version;
 
   const Browser({this.name, this.version});
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
-    final Map<String, dynamic> json = {};
+    final json = <String, dynamic>{};
 
     if (name != null) json['name'] = name;
 
@@ -1015,35 +1016,40 @@ class Browser {
 /// ```
 class User {
   /// A unique identifier of the user.
-  final String id;
+  final String? id;
 
   /// The username of the user.
-  final String username;
+  final String? username;
 
   /// The email address of the user.
-  final String email;
+  final String? email;
 
   /// The IP of the user.
-  final String ipAddress;
+  final String? ipAddress;
 
   /// Any other user context information that may be helpful.
   ///
   /// These keys are stored as extra information but not specifically processed
   /// by Sentry.
-  final Map<String, dynamic> extras;
+  final Map<String, dynamic>? extras;
 
   /// At a minimum you must set an [id] or an [ipAddress].
-  const User({this.id, this.username, this.email, this.ipAddress, this.extras})
-      : assert(id != null || ipAddress != null);
+  const User({
+    this.id,
+    this.username,
+    this.email,
+    this.ipAddress,
+    this.extras,
+  }) : assert(id != null || ipAddress != null);
 
   /// Produces a [Map] that can be serialized to JSON.
   Map<String, dynamic> toJson() {
     return {
-      "id": id,
-      "username": username,
-      "email": email,
-      "ip_address": ipAddress,
-      "extras": extras,
+      'id': id,
+      'username': username,
+      'email': email,
+      'ip_address': ipAddress,
+      'extras': extras,
     };
   }
 }
@@ -1068,12 +1074,12 @@ class Breadcrumb {
   /// Describes the breadcrumb.
   ///
   /// This field is optional and may be set to null.
-  final String message;
+  final String? message;
 
   /// A dot-separated string describing the source of the breadcrumb, e.g. "ui.click".
   ///
   /// This field is optional and may be set to null.
-  final String category;
+  final String? category;
 
   /// Data associated with the breadcrumb.
   ///
@@ -1084,12 +1090,12 @@ class Breadcrumb {
   /// See also:
   ///
   /// * https://docs.sentry.io/development/sdk-dev/event-payloads/breadcrumbs/#breadcrumb-types
-  final Map<String, String> data;
+  final Map<String, String>? data;
 
   /// Severity of the breadcrumb.
   ///
   /// This field is optional and may be set to null.
-  final SeverityLevel level;
+  final SeverityLevel? level;
 
   /// Describes what type of breadcrumb this is.
   ///
@@ -1100,7 +1106,7 @@ class Breadcrumb {
   /// See also:
   ///
   /// * https://docs.sentry.io/development/sdk-dev/event-payloads/breadcrumbs/#breadcrumb-types
-  final String type;
+  final String? type;
 
   /// The time the breadcrumb was recorded.
   ///
@@ -1117,7 +1123,7 @@ class Breadcrumb {
     this.data,
     this.level = SeverityLevel.info,
     this.type,
-  }) : assert(timestamp != null);
+  });
 
   /// Converts this breadcrumb to a map that can be serialized to JSON according
   /// to the Sentry protocol.
@@ -1131,11 +1137,11 @@ class Breadcrumb {
     if (category != null) {
       json['category'] = category;
     }
-    if (data != null && data.isNotEmpty) {
-      json['data'] = Map.of(data);
+    if (data != null && data!.isNotEmpty) {
+      json['data'] = Map.of(data!);
     }
     if (level != null) {
-      json['level'] = level.name;
+      json['level'] = level!.name;
     }
     if (type != null) {
       json['type'] = type;
@@ -1151,7 +1157,7 @@ class Dsn {
 
   /// The Sentry.io secret key for the project.
   @visibleForTesting
-  final String secretKey;
+  final String? secretKey;
 
   /// The ID issued by Sentry.io to your project.
   ///
@@ -1162,15 +1168,15 @@ class Dsn {
   final Uri uri;
 
   Dsn({
-    @required this.publicKey,
-    @required this.projectId,
-    this.uri,
+    required this.publicKey,
+    required this.projectId,
+    required this.uri,
     this.secretKey,
   });
 
   static Dsn parse(String dsn) {
-    final Uri uri = Uri.parse(dsn);
-    final List<String> userInfo = uri.userInfo.split(':');
+    final uri = Uri.parse(dsn);
+    final userInfo = uri.userInfo.split(':');
 
     assert(() {
       if (uri.pathSegments.isEmpty) {

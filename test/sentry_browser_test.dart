@@ -2,7 +2,6 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the LICENSE file.
 @TestOn("browser")
-
 import 'package:sentry/browser_client.dart';
 import 'package:sentry/sentry.dart';
 import 'package:test/test.dart';

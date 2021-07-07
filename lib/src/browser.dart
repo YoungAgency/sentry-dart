@@ -6,9 +6,9 @@
 import 'dart:convert';
 import 'dart:html' hide Event, Client;
 
-import 'package:http/http.dart';
 import 'package:http/browser_client.dart';
-import 'package:meta/meta.dart';
+import 'package:http/http.dart';
+
 import 'base.dart';
 import 'version.dart';
 
@@ -36,12 +36,12 @@ class SentryBrowserClient extends SentryClient {
   /// field instead of the built-in random UUID v4 generator. This is useful in
   /// tests.
   factory SentryBrowserClient({
-    @required String dsn,
-    Event environmentAttributes,
-    Client httpClient,
+    required String dsn,
+    required Event environmentAttributes,
+    Client? httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
-    String origin,
+    UuidGenerator? uuidGenerator,
+    String? origin,
   }) {
     httpClient ??= BrowserClient();
     clock ??= getUtcDateTime;
@@ -62,13 +62,13 @@ class SentryBrowserClient extends SentryClient {
   }
 
   SentryBrowserClient._({
-    Client httpClient,
+    required Client httpClient,
     dynamic clock,
-    UuidGenerator uuidGenerator,
-    Event environmentAttributes,
-    String dsn,
-    String platform,
-    String origin,
+    required UuidGenerator uuidGenerator,
+    required Event environmentAttributes,
+    required String dsn,
+    String? platform,
+    String? origin,
   }) : super.base(
           httpClient: httpClient,
           clock: clock,
@@ -89,12 +89,11 @@ class SentryBrowserClient extends SentryClient {
 }
 
 SentryClient createSentryClient({
-  @required String dsn,
-  Event environmentAttributes,
-  bool compressPayload,
-  Client httpClient,
+  required String dsn,
+  required Event environmentAttributes,
+  Client? httpClient,
   dynamic clock,
-  UuidGenerator uuidGenerator,
+  required UuidGenerator uuidGenerator,
 }) =>
     SentryBrowserClient(
       dsn: dsn,
